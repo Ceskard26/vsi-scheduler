@@ -1,7 +1,3 @@
-Perfecto, ahora continúo con la documentación completa usando el repositorio real:
-
----
-
 # Automatización de Instancias VSI en IBM Cloud con Code Engine
 
 Esta guía documenta la implementación de una solución serverless para automatizar el encendido y apagado de Virtual Server Instances (VSI) en IBM Cloud VPC mediante Code Engine y Event Subscriptions programados.
