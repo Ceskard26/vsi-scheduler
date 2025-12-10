@@ -1,138 +1,115 @@
-# Automatización de Instancias VSI en IBM Cloud: Arquitectura Serverless con Code Engine
+# Automatización de Instancias VSI en IBM Cloud con Code Engine
 
-**Autor:** César Carrasco - IBM Cloud Customer Success Specialist  
-**Fecha:** Diciembre 2024  
-**Nivel:** Intermedio a Avanzado  
+Esta guía documenta la implementación de una solución serverless para automatizar el encendido y apagado de Virtual Server Instances (VSI) en IBM Cloud VPC mediante Code Engine y Event Subscriptions programados.
 
----
+## ¿Qué hace esta solución?
 
-## Resumen Ejecutivo
+Permite programar horarios de encendido y apagado de instancias VSI automáticamente, optimizando costos al mantener las instancias activas solo cuando son necesarias (por ejemplo, horario laboral de lunes a viernes).
 
-Esta guía documenta la implementación de una solución serverless para automatizar el ciclo de vida de Virtual Server Instances (VSI) en IBM Cloud VPC mediante Code Engine y Event Subscriptions. La arquitectura propuesta permite optimizar costos operacionales al gestionar el encendido y apagado programático de instancias según horarios definidos, reduciendo el gasto en recursos computacionales fuera del horario productivo.
-
-**Beneficios clave:**
-- Reducción de costos de infraestructura hasta un 65% en ambientes no productivos
-- Ejecución serverless con facturación basada en uso real
-- Escalabilidad horizontal para gestión de múltiples instancias
-- Orquestación declarativa mediante cron expressions
-- Observabilidad integrada con logs centralizados
+**Características principales:**
+- Soporte para múltiples instancias simultáneamente
+- Ejecución serverless (sin infraestructura que mantener)
+- Programación flexible con expresiones cron
+- Logs centralizados de cada ejecución
 
 ---
 
 ## Arquitectura de la Solución
 
-<img width="924" height="329" alt="Captura de pantalla 2025-12-10 a la(s) 2 25 38 p  m" src="https://github.com/user-attachments/assets/d23224fd-a30c-4e25-a0b9-c8be375b3b13" />
-
+![Diagrama de Arquitectura](images/architecture-diagram.png)
 *Flujo end-to-end desde desarrollo hasta ejecución automatizada*
 
-### Componentes Principales
+### Componentes
 
-| Componente | Rol | Tecnología |
-|------------|-----|------------|
-| **Source Repository** | Control de versiones del código fuente | GitHub |
-| **Build Environment** | Construcción de imágenes de contenedor | Docker Engine |
-| **Container Registry** | Almacenamiento de artefactos | IBM Container Registry (us-south) |
-| **Orchestration Platform** | Ejecución serverless y scheduling | IBM Code Engine |
-| **Target Infrastructure** | Instancias a gestionar | IBM VPC Gen 2 |
-
-### Flujo de Datos
-
-1. **Phase 1 - Build & Deployment**
-   - Clonación del repositorio desde GitHub
-   - Construcción local de imagen Docker
-   - Push de artefacto a Container Registry (Dallas)
-
-2. **Phase 2 - Runtime Execution**
-   - Event Subscription activa job según cron schedule
-   - Code Engine ejecuta contenedor con credenciales IAM
-   - Invocación a VPC API para operaciones start/stop
-   - Persistencia de logs de ejecución
+| Componente | Función | Tecnología |
+|------------|---------|------------|
+| Source Repository | Control de versiones del código fuente | GitHub |
+| Build Environment | Construcción de imágenes de contenedor | Docker Engine |
+| Container Registry | Almacenamiento de artefactos | IBM Container Registry (us-south) |
+| Orchestration Platform | Ejecución serverless y scheduling | IBM Code Engine |
+| Target Infrastructure | Instancias a gestionar | IBM VPC Gen 2 |
 
 ---
 
-## Prerequisitos Técnicos
+## Prerrequisitos
 
-### 1. Herramientas de Desarrollo
+### 1. Herramientas instaladas
 
+- **IBM Cloud CLI** - [Guía de instalación](https://cloud.ibm.com/docs/cli?topic=cli-getting-started)
+- **Docker Desktop** - [Descargar](https://www.docker.com/products/docker-desktop)
+- **Git** - Para clonar el repositorio
+
+Verificar instalación:
 ```bash
-# Verificar versiones instaladas
-ibmcloud --version  # >= 2.0.0
-docker --version    # >= 20.10.0
-git --version       # >= 2.30.0
-```
-Instalación de IBM Cloud CLI:
-- **macOS/Linux:** `curl -fsSL https://clis.cloud.ibm.com/install/linux | sh`
-- **Windows:** Descarga desde https://cloud.ibm.com/docs/cli
-
-Plugins requeridos:
-```bash
-ibmcloud plugin install container-registry
-ibmcloud plugin install code-engine
-ibmcloud plugin install vpc-infrastructure
+ibmcloud --version
+docker --version
+git --version
 ```
 
-### 2. Credenciales y Permisos IAM
+### 2. API Key con permisos
 
-**API Key Requirements:**
+Crear una API Key desde la [consola de IBM Cloud](https://cloud.ibm.com/iam/apikeys) con los siguientes permisos mínimos:
 
-La API Key debe contar con las siguientes políticas IAM:
+| Servicio | Rol Requerido | Propósito |
+|----------|---------------|-----------|
+| VPC Infrastructure | Editor | Ejecutar acciones start/stop en VSIs |
+| Code Engine | Writer | Crear jobs y secrets |
+| Container Registry | Manager | Crear namespaces y push de imágenes |
+| Resource Group | Viewer | Visualizar y targetear resource groups |
 
-| Servicio | Rol Mínimo | Justificación |
-|----------|------------|---------------|
-| VPC Infrastructure | Editor | Ejecución de acciones start/stop en VSIs |
-| Code Engine | Writer | Despliegue de jobs y secrets |
-| Container Registry | Reader | Pull de imágenes de contenedor |
+**Documentación:** [Gestión de API Keys](https://cloud.ibm.com/docs/account?topic=account-userapikey&interface=ui)
 
-<img width="645" height="398" alt="Captura de pantalla 2025-12-10 a la(s) 2 31 38 p  m" src="https://github.com/user-attachments/assets/ee7e80fa-3018-4843-bc1c-2b0f8ca6d0d2" />
+**⚠️ Importante:** Guarde la API Key de forma segura. Solo se muestra una vez al crearla.
 
-*Configuración de políticas IAM requeridas*
+### 3. IDs de instancias VSI
 
-Creación de API Key:
+Identifique las instancias que desea automatizar:
+
+**Opción 1 - Desde la consola:**
+1. Acceda a [VPC Infrastructure → Virtual server instances](https://cloud.ibm.com/vpc-ext/compute/vs)
+2. Click en cada instancia para ver su ID
+
+**Opción 2 - Desde CLI:**
 ```bash
-ibmcloud iam api-key-create vsi-automation-key \
-  -d "Production VSI Scheduler" \
-  --file vsi-automation-key.json
+ibmcloud is instances
 ```
 
-**⚠️ Importante:** Almacene la API Key en un gestor de secretos (HashiCorp Vault, IBM Secrets Manager) y rote periódicamente.
+Anote los IDs de las instancias (formato: `0757_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
 
-### 3. Inventario de Recursos
+### 4. Resource Group
 
-Documentar IDs de instancias VSI:
+Identifique el resource group donde trabajará:
 ```bash
-ibmcloud is instances --output json | \
-  jq -r '.[] | "\(.id),\(.name),\(.zone.name)"' > vsi-inventory.csv
+# Listar resource groups disponibles
+ibmcloud resource groups
+
+# Targetear su resource group
+ibmcloud target -g <nombre-resource-group>
 ```
 
 ---
 
 ## Implementación
 
-### Paso 1: Obtención del Código Fuente
-
-Clone el repositorio que contiene los artefactos de la solución:
+### Paso 1: Clonar el repositorio
 
 ```bash
-git clone https://github.com/your-org/vsi-automation.git
-cd vsi-automation
+git clone https://github.com/Ceskard26/vsi-scheduler.git
+cd vsi-scheduler
 ```
 
-**Estructura del repositorio:**
+Estructura del repositorio:
 ```
-vsi-automation/
-├── instance_scheduler.py    # Script principal de automatización
+vsi-scheduler/
+├── instance_scheduler.py    # Script principal
 ├── Dockerfile                # Definición de imagen
 ├── requirements.txt          # Dependencias Python
-└── README.md                 # Documentación
+└── README.md
 ```
 
 ---
 
-### Paso 2: Construcción del Contenedor
-
-La imagen Docker encapsula el runtime de Python y las dependencias del SDK de IBM Cloud.
-
-#### 2.1 Construcción Local
+### Paso 2: Construir la imagen Docker
 
 ```bash
 # Construir imagen
@@ -144,63 +121,47 @@ docker images vsi-scheduler
 
 **Output esperado:**
 ```
-REPOSITORY       TAG      IMAGE ID       CREATED         SIZE
-vsi-scheduler    latest   abc123def456   2 minutes ago   254MB
+REPOSITORY                                 TAG      DIGEST         SIZE
+us.icr.io/vsi-automation/vsi-scheduler    latest   sha256:abc...  254 MB
 ```
 
-**[IMAGEN: Terminal mostrando docker build exitoso - docker-build.png]**
-
-#### 2.2 Consideraciones de Optimización
-
-El Dockerfile implementa las siguientes mejores prácticas:
-
-- **Multi-stage builds:** Reducción del tamaño de imagen final
-- **Layer caching:** Instalación de dependencias antes de copiar código fuente
-- **Slim base image:** Python 3.11-slim para footprint mínimo
-- **Non-root user:** Ejecución con usuario sin privilegios
-
+![Imagen en Container Registry](images/registry-image.png)
 ---
 
-### Paso 3: Registro en Container Registry
+### Paso 3: Subir imagen a Container Registry
 
-IBM Container Registry proporciona almacenamiento privado de imágenes con escaneo de vulnerabilidades integrado.
-
-#### 3.1 Configuración Regional
+#### 3.1 Configurar región y autenticación
 
 ```bash
-# Configurar región Dallas (us-south)
+# Configurar región Dallas
 ibmcloud cr region-set us-south
 
-# Autenticación
+# Login a Container Registry
 ibmcloud cr login
 ```
 
-#### 3.2 Gestión de Namespace
+#### 3.2 Crear namespace
 
-Los namespaces proveen aislamiento lógico entre proyectos:
+**Importante:** Debe tener un resource group targeteado antes de crear el namespace.
 
 ```bash
-# Crear namespace (si no existe)
+# Si no tiene resource group targeteado
+ibmcloud target -g <nombre-resource-group>
+
+# Crear namespace
 ibmcloud cr namespace-add vsi-automation
-
-# Listar namespaces disponibles
-ibmcloud cr namespace-list
 ```
 
-#### 3.3 Push de Imagen
+#### 3.3 Tag y push de la imagen
 
 ```bash
-# Tag con nomenclatura del registry
-docker tag vsi-scheduler:latest \
-  us.icr.io/vsi-automation/vsi-scheduler:latest
+# Tag de la imagen
+docker tag vsi-scheduler:latest us.icr.io/vsi-automation/vsi-scheduler:latest
 
-# Push a registry remoto
+# Push a Container Registry
 docker push us.icr.io/vsi-automation/vsi-scheduler:latest
-```
 
-**Monitoreo del push:**
-```bash
-# Verificar imagen en registry
+# Verificar imagen subida
 ibmcloud cr images --restrict vsi-automation
 ```
 
@@ -210,120 +171,127 @@ REPOSITORY                                 TAG      DIGEST         SIZE
 us.icr.io/vsi-automation/vsi-scheduler    latest   sha256:abc...  254 MB
 ```
 
-**⚠️ Troubleshooting:** Si el tamaño reportado es < 10 MB, indica un push incompleto. Elimine la imagen y reintente.
-
-**[IMAGEN: Consola mostrando imagen en Container Registry - registry-image.png]**
+**[IMAGEN: registry-image.png]**
 
 ---
 
-### Paso 4: Configuración de Code Engine
+### Paso 4: Crear proyecto y secret en Code Engine
 
-Code Engine abstrae la complejidad de Kubernetes, proporcionando una capa serverless para ejecución de jobs.
+#### 4.1 Crear proyecto
 
-#### 4.1 Creación del Proyecto
+Acceda a [Code Engine Projects](https://cloud.ibm.com/codeengine/projects) y click en **"Create project"**.
 
-Acceda a la consola de Code Engine:
-- **URL:** https://cloud.ibm.com/codeengine/projects
-- Click en **"Create project"**
+![Crear proyecto en Code Engine](images/ce-create-project.png)
 
-**[IMAGEN: Formulario de creación de proyecto - ce-project-create.png]**
+Configuración:
+- **Name:** `vsi-automation` (o el nombre que prefiera)
+- **Location:** `us-south (Dallas)`
+- **Resource Group:** Seleccione su resource group
 
-**Configuración recomendada:**
+Click en **"Create"**.
 
-| Parámetro | Valor | Notas |
-|-----------|-------|-------|
-| Name | `vsi-automation-prod` | Nomenclatura descriptiva |
-| Location | `us-south (Dallas)` | Colocation con Container Registry |
-| Resource Group | Según organización | Alineado a modelo de facturación |
+**Documentación:** [Getting started with Code Engine](https://cloud.ibm.com/docs/codeengine?topic=codeengine-getting-started)
 
-**Documentación oficial:** https://cloud.ibm.com/docs/codeengine?topic=codeengine-getting-started
+#### 4.2 Crear secret
 
-#### 4.2 Configuración de Secrets
-
-Los secrets almacenan credenciales de forma segura, inyectándolas como variables de entorno en tiempo de ejecución.
-
-**Navegación:**
-1. Seleccione el proyecto creado
-2. **Secrets and configmaps** → **Create**
+Dentro del proyecto creado:
+1. Click en **"Secrets and configmaps"** (menú lateral)
+2. Click en **"Create"**
 3. Seleccione **"Secret"**
 
-**[IMAGEN: Formulario de creación de secret - ce-secret-create.png]**
+![Crear secret en Code Engine](images/ce-create-secret.png)
 
-**Configuración:**
+Configuración:
 - **Name:** `ibm-api-credentials`
-- **Format:** Generic (no Registry)
-- **Key-value pair:**
+- **Format:** `Generic` (no Registry)
+- Click en **"Add key-value pair"**
   - **Key:** `IBM_API_KEY`
-  - **Value:** `<su-api-key-generada-previamente>`
+  - **Value:** Pegue su API Key
 
-**⚠️ Seguridad:** Nunca commit API keys en repositorios. Utilice secrets management dedicado para ambientes productivos.
-
-#### 4.3 Creación de Jobs
-
-Los jobs representan cargas de trabajo batch con ejecución finita.
-
-**Navegación:**
-1. **Jobs** → **Create**
-
-**[IMAGEN: Formulario de creación de job - ce-job-create.png]**
-
-##### Job 1: Detención de Instancias
-
-| Sección | Parámetro | Valor |
-|---------|-----------|-------|
-| **General** | Name | `stop-vsis-prod` |
-| | Code | Container image |
-| | Image reference | `us.icr.io/vsi-automation/vsi-scheduler:latest` |
-| | Registry access | Automatic |
-| **Resources** | CPU | 0.25 vCPU |
-| | Memory | 512 MB |
-| | Max execution time | 600 seconds |
-| | Retry limit | 2 |
-| **Environment Variables** | | |
-| | Secret reference | `ibm-api-credentials` (full secret) |
-| | INSTANCE_IDS | `<id1>,<id2>,<id3>` (literal) |
-| | REGION | `us-east` (literal) |
-| | ACTION | `stop` (literal) |
-| | EXECUTION_MODE | `sequential` (literal) |
-| | CONTINUE_ON_ERROR | `true` (literal) |
-
-**[IMAGEN: Variables de entorno configuradas - ce-job-envvars.png]**
-
-##### Job 2: Inicio de Instancias
-
-Repita la configuración anterior con estas diferencias:
-
-| Parámetro | Valor |
-|-----------|-------|
-| Name | `start-vsis-prod` |
-| ACTION | `start` |
-
-**Todas las demás configuraciones permanecen idénticas.**
-
-**Documentación oficial:** https://cloud.ibm.com/docs/codeengine?topic=codeengine-job-plan
+Click en **"Create"**.
 
 ---
 
-### Paso 5: Validación y Testing
+### Paso 5: Crear jobs
 
-Antes de programar ejecuciones automáticas, valide el comportamiento de los jobs mediante invocaciones manuales.
+#### 5.1 Job para detener instancias
 
-#### 5.1 Ejecución Manual
+En el menú lateral, click en **"Jobs"** → **"Create"**.
 
-**Navegación:**
-1. **Jobs** → Seleccione `stop-vsis-prod`
+![Crear job en Code Engine](images/ce-create-job.png)
+
+**Sección General:**
+- **Name:** `stop-vsis`
+- **Code:** Seleccione **"Container image"**
+- **Image reference:** `us.icr.io/vsi-automation/vsi-scheduler:latest`
+- **Registry access:** Automático
+
+**Sección Resources & scaling:**
+- **CPU:** `0.25` vCPU
+- **Memory:** `0.5` GB
+- **Ephemeral storage:** Default
+- **Max execution time:** `600` seconds
+- **Job timeout:** Default
+- **Retry limit:** `2`
+- **Array indices:** `0`
+
+**Sección Environment variables:**
+
+![Variables de entorno del job](images/ce-job-envvars.png)
+
+Click en **"Add"** para cada variable:
+
+| Type | Name/Secret | Value |
+|------|-------------|-------|
+| `Reference to full secret` | `ibm-api-credentials` | - |
+| `Literal value` | `INSTANCE_IDS` | `<id1>,<id2>,<id3>` |
+| `Literal value` | `REGION` | `us-east` |
+| `Literal value` | `ACTION` | `stop` |
+| `Literal value` | `EXECUTION_MODE` | `sequential` |
+| `Literal value` | `CONTINUE_ON_ERROR` | `true` |
+
+**Variables de entorno - Referencia:**
+
+| Variable | Descripción | Valores | Requerida |
+|----------|-------------|---------|-----------|
+| `IBM_API_KEY` | API Key de IBM Cloud (desde secret) | - | ✅ |
+| `INSTANCE_IDS` | IDs de VSIs separados por comas | `0757_abc,0757_def` | ✅ |
+| `REGION` | Región donde están las VSIs | `us-east`, `us-south`, `eu-de` | ✅ |
+| `ACTION` | Acción a ejecutar | `start`, `stop`, `status` | ✅ |
+| `EXECUTION_MODE` | Modo de ejecución | `sequential`, `parallel` | ❌ (default: `sequential`) |
+| `CONTINUE_ON_ERROR` | Continuar si falla una instancia | `true`, `false` | ❌ (default: `true`) |
+
+Click en **"Create"**.
+
+**Documentación:** [Working with jobs in Code Engine](https://cloud.ibm.com/docs/codeengine?topic=codeengine-job-plan)
+
+#### 5.2 Job para iniciar instancias
+
+Repita el proceso anterior con estos cambios:
+- **Name:** `start-vsis`
+- **ACTION:** `start` (en lugar de `stop`)
+
+**Todas las demás configuraciones permanecen iguales.**
+
+---
+
+### Paso 6: Probar los jobs
+
+#### 6.1 Ejecutar job manualmente
+
+1. En **"Jobs"**, seleccione `stop-vsis`
 2. Click en **"Submit job"**
-3. Confirme con **"Submit"**
+3. Click en **"Submit"**
 
-**[IMAGEN: Consola mostrando job run en ejecución - ce-jobrun-running.png]**
+**[IMAGEN: ce-jobrun-running.png]**
 
-#### 5.2 Análisis de Logs
+#### 6.2 Ver logs de ejecución
 
-**Navegación:**
-1. **Job runs** → Seleccione el run más reciente
-2. Verifique logs en tiempo real
+1. Click en la pestaña **"Job runs"**
+2. Seleccione el job run más reciente
+3. Revise los logs
 
-**[IMAGEN: Logs de ejecución exitosa - ce-jobrun-logs-success.png]**
+![Logs de ejecución del job](images/ce-jobrun-logs.png)
 
 **Logs esperados:**
 ```
@@ -337,349 +305,156 @@ IBM Cloud VPC Instance Scheduler - Multi-Instance
    Instancias: 3
    Modo: sequential
 
-🚀 Procesando instancias...
+🚀 Procesando instancias en modo sequential...
 
 ⏸️  Deteniendo instancia prod-web-01 (0757_abc...)...
-✓ Comando de detención enviado exitosamente
+✓ Comando de detención enviado exitosamente para prod-web-01
 
 ⏸️  Deteniendo instancia prod-api-01 (0757_def...)...
-✓ Comando de detención enviado exitosamente
+✓ Comando de detención enviado exitosamente para prod-api-01
 
 ======================================================================
-📊 Resumen:
+📊 Resumen de ejecución:
    Total: 3
    ✓ Exitosas: 3
    ✗ Fallidas: 0
 ======================================================================
 ```
 
-#### 5.3 Verificación de Estado
+#### 6.3 Verificar estado de las VSIs
 
-Confirme cambio de estado en las instancias:
+Acceda a [VPC Infrastructure → Virtual server instances](https://cloud.ibm.com/vpc-ext/compute/vs)
 
-```bash
-ibmcloud is instances | grep -E 'Name|Status'
-```
+![Instancias VSI detenidas](images/vpc-instances-stopped.png)
 
-**Output esperado:**
-```
-Name                Status
-prod-web-01        stopping
-prod-api-01        stopping
-prod-db-01         stopping
-```
+Las instancias deberían mostrar estado `stopping` o `stopped`.
 
-**[IMAGEN: Consola de VPC mostrando instancias detenidas - vpc-instances-stopped.png]**
+#### 6.4 Probar job de inicio
 
-#### 5.4 Test del Job de Inicio
-
-Repita el proceso con `start-vsis-prod` y verifique que las instancias transicionen a estado `running`.
+Repita el proceso con el job `start-vsis` para verificar que las instancias se inicien correctamente.
 
 ---
 
-### Paso 6: Programación con Event Subscriptions
+### Paso 7: Programar ejecución automática
 
-Event Subscriptions proporciona capacidades de scheduling declarativo mediante cron expressions.
+#### 7.1 Crear Event Subscription
 
-#### 6.1 Creación de Subscription
+En el menú lateral, click en **"Event subscriptions"** → **"Create"**.
 
-**Navegación:**
-1. **Event subscriptions** → **Create**
+![Crear event subscription](images/ce-create-subscription.png)
 
-**[IMAGEN: Formulario de creación de event subscription - ce-subscription-create.png]**
+**Para iniciar VSIs (Lunes a Viernes 8 AM):**
 
-**Configuración para inicio matutino:**
+- **General:**
+  - **Event type:** `Periodic timer`
+  - **Name:** `start-vsis-weekday-morning`
 
-| Sección | Parámetro | Valor |
-|---------|-----------|-------|
-| **General** | Event type | Periodic timer |
-| | Name | `start-vsis-weekday-morning` |
-| **Schedule** | Cron expression | `0 8 * * 1-5` |
-| | Time zone | `America/Chicago` |
-| **Consumer** | Component type | Job |
-| | Job | `start-vsis-prod` |
+- **Schedule:**
+  - **Cron expression:** `0 8 * * 1-5`
+  - **Time zone:** Seleccione su zona horaria (ej: `America/Chicago`)
 
-**[IMAGEN: Cron expression configurado - ce-subscription-cron.png]**
+- **Event consumer:**
+  - **Component type:** `Job`
+  - **Job:** `start-vsis`
 
-#### 6.2 Subscription para Detención
+Click en **"Create"**.
 
-Repita con estos parámetros:
+**Para detener VSIs (Lunes a Viernes 6 PM):**
 
-| Parámetro | Valor |
-|-----------|-------|
-| Name | `stop-vsis-weekday-evening` |
-| Cron expression | `0 18 * * 1-5` |
-| Job | `stop-vsis-prod` |
+Repita el proceso con:
+- **Name:** `stop-vsis-weekday-evening`
+- **Cron expression:** `0 18 * * 1-5`
+- **Job:** `stop-vsis`
 
-**Documentación oficial:** https://cloud.ibm.com/docs/codeengine?topic=codeengine-subscribe-cron
+**Documentación:** [Working with cron subscriptions](https://cloud.ibm.com/docs/codeengine?topic=codeengine-subscribe-cron)
 
-#### 6.3 Catálogo de Cron Expressions
+#### 7.2 Ejemplos de Cron Expressions
 
-| Caso de Uso | Expresión | Descripción |
-|-------------|-----------|-------------|
-| Business hours | `0 8 * * 1-5` | L-V 8:00 AM |
-| End of day | `0 18 * * 1-5` | L-V 6:00 PM |
-| Weekend shutdown | `0 20 * * 5` | Viernes 8:00 PM |
-| Weekend startup | `0 7 * * 1` | Lunes 7:00 AM |
-| Monthly maintenance | `0 2 1 * *` | Día 1 de cada mes 2:00 AM |
-| Bi-hourly check | `0 */2 * * *` | Cada 2 horas |
+| Caso de Uso | Expresión Cron | Descripción |
+|-------------|----------------|-------------|
+| Horario laboral | `0 8 * * 1-5` | Lunes a Viernes 8:00 AM |
+| Fin de día | `0 18 * * 1-5` | Lunes a Viernes 6:00 PM |
+| Solo Lunes | `0 7 * * 1` | Lunes 7:00 AM |
+| Fin de semana | `0 20 * * 5` | Viernes 8:00 PM |
+| Cada 2 horas | `0 */2 * * *` | Cada 2 horas |
 
-**Herramienta de validación:** https://crontab.guru
+**Herramienta de validación:** [Crontab Guru](https://crontab.guru)
 
-**[IMAGEN: Lista de event subscriptions activas - ce-subscriptions-list.png]**
+**Formato:** `minuto hora día-mes mes día-semana`
 
----
-
-## Variables de Entorno: Referencia Completa
-
-### Variables Obligatorias
-
-| Variable | Tipo | Descripción | Ejemplo |
-|----------|------|-------------|---------|
-| `IBM_API_KEY` | Secret | Credencial IAM para autenticación VPC API | `<desde secret>` |
-| `INSTANCE_IDS` | String | Lista CSV de instance IDs | `0757_a,0757_b,0757_c` |
-| `REGION` | String | Región de VPC donde residen las instancias | `us-east`, `us-south` |
-| `ACTION` | Enum | Operación a ejecutar | `start`, `stop`, `status` |
-
-### Variables Opcionales
-
-| Variable | Default | Descripción | Valores |
-|----------|---------|-------------|---------|
-| `EXECUTION_MODE` | `sequential` | Estrategia de procesamiento | `sequential`, `parallel` |
-| `CONTINUE_ON_ERROR` | `true` | Comportamiento ante fallos | `true`, `false` |
-
-### Consideraciones de Configuración
-
-**Sequential vs Parallel:**
-
-- **Sequential:** Procesa instancias una a una. Recomendado para:
-  - Ambientes con dependencias entre instancias
-  - Debugging y troubleshooting
-  - Límites de rate limiting estrictos
-
-- **Parallel:** Procesa todas las instancias simultáneamente. Recomendado para:
-  - Ambientes de gran escala (>10 instancias)
-  - Minimizar tiempo total de ejecución
-  - Instancias completamente independientes
-
-**Error Handling:**
-
-- `CONTINUE_ON_ERROR=true`: Procesa todas las instancias incluso si alguna falla
-- `CONTINUE_ON_ERROR=false`: Detiene ejecución ante primer error
+**Días de semana:**
+- 0 = Domingo
+- 1 = Lunes
+- 2 = Martes
+- 3 = Miércoles
+- 4 = Jueves
+- 5 = Viernes
+- 6 = Sábado
 
 ---
 
-## Operaciones y Mantenimiento
+## Troubleshooting
 
-### Monitoreo de Ejecuciones
+### Error: "IBM_API_KEY no está configurada"
 
-**Desde Consola:**
-1. **Jobs** → Seleccione job → **Job runs**
-2. Visualice historial completo de ejecuciones
-3. Filtre por estado: Success, Failed, Pending
+**Causa:** El secret está configurado como tipo `registry` en lugar de `generic`.
 
-**[IMAGEN: Historial de job runs - ce-jobrun-history.png]**
+**Solución:**
+1. Elimine el secret actual
+2. Recree el secret asegurándose de seleccionar **Format: Generic**
+3. Agregue la key-value pair correctamente
 
-**Desde CLI:**
-```bash
-# Listar últimas 20 ejecuciones
-ibmcloud ce jobrun list --job start-vsis-prod --limit 20
+### Error: "trying and failing to pull image"
 
-# Ver logs de ejecución específica
-ibmcloud ce jobrun logs --name start-vsis-prod-run-abc123
-```
-
-### Métricas de Rendimiento
-
-**KPIs a monitorear:**
-- **Success Rate:** % de ejecuciones exitosas
-- **Execution Time:** Tiempo promedio de ejecución
-- **Failure Rate:** Tendencia de fallos
-- **Cost per Execution:** vCPU-seconds consumidos
-
-### Troubleshooting
-
-#### Problema: Job falla con "IBM_API_KEY no está configurada"
-
-**Causa:** Secret configurado como tipo `registry` en lugar de `generic`
+**Causa:** La imagen no se subió correctamente o hay problemas de permisos.
 
 **Solución:**
 ```bash
-# Verificar formato del secret
-ibmcloud ce secret get --name ibm-api-credentials
+# Verificar que la imagen existe y tiene tamaño correcto (>200 MB)
+ibmcloud cr images --restrict vsi-automation
 
-# Si Format=registry, eliminar y recrear
-ibmcloud ce secret delete --name ibm-api-credentials --force
-ibmcloud ce secret create --name ibm-api-credentials \
-  --from-literal IBM_API_KEY=<api-key>
+# Si el tamaño es muy pequeño (<10 MB), eliminar y volver a subir
+ibmcloud cr image-rm us.icr.io/vsi-automation/vsi-scheduler:latest
+docker push us.icr.io/vsi-automation/vsi-scheduler:latest
 ```
 
-#### Problema: Instancias no cambian de estado
+### Las instancias no cambian de estado
 
-**Diagnóstico:**
-1. Verificar permisos IAM de la API Key
-2. Confirmar IDs de instancias correctos
-3. Validar región configurada
+**Causas comunes:**
+- IDs de instancias incorrectos
+- Región configurada incorrectamente
+- Permisos insuficientes en la API Key
 
-```bash
-# Verificar permisos
-ibmcloud iam api-key-get vsi-automation-key
+**Solución:**
+1. Verifique los IDs de instancias: `ibmcloud is instances`
+2. Confirme que la región en la variable `REGION` coincida con donde están las VSIs
+3. Verifique permisos de la API Key en [IAM](https://cloud.ibm.com/iam/apikeys)
 
-# Test manual de API
-ibmcloud is instance-stop <instance-id>
-```
+### Error al crear namespace: "no resource group is targeted"
 
-#### Problema: Image pull failed
-
-**Causa:** Permisos insuficientes en Container Registry
+**Causa:** No tiene un resource group targeteado.
 
 **Solución:**
 ```bash
-# Verificar permisos en namespace
-ibmcloud cr namespace-list
+# Targetear resource group antes de crear namespace
+ibmcloud target -g <nombre-resource-group>
 
-# Otorgar acceso si es necesario
-ibmcloud iam service-policy-create codeengine \
-  --roles Reader --service-name container-registry
+# Luego crear namespace
+ibmcloud cr namespace-add vsi-automation
 ```
 
 ---
 
-## Consideraciones de Seguridad
+## Recursos Adicionales
 
-### Principio de Mínimo Privilegio
-
-La API Key debe limitarse estrictamente a las operaciones requeridas:
-
-```json
-{
-  "roles": [
-    {
-      "role_id": "crn:v1:bluemix:public:iam::::role:Editor",
-      "resources": [{
-        "attributes": [{
-          "name": "serviceName",
-          "value": "is"
-        }]
-      }]
-    }
-  ]
-}
-```
-
-### Rotación de Credenciales
-
-Implemente rotación automática de API Keys:
-
-```bash
-# Crear nueva API Key
-ibmcloud iam api-key-create vsi-automation-key-v2
-
-# Actualizar secret en Code Engine
-ibmcloud ce secret update ibm-api-credentials \
-  --from-literal IBM_API_KEY=<nueva-key>
-
-# Eliminar API Key anterior
-ibmcloud iam api-key-delete vsi-automation-key
-```
-
-**Frecuencia recomendada:** Cada 90 días
-
-### Auditoría
-
-Habilite Activity Tracker para auditoría de operaciones:
-
-```bash
-ibmcloud resource service-instance-create \
-  vsi-automation-tracker \
-  logdnaat \
-  7-day \
-  us-south
-```
+- **Repositorio GitHub:** [vsi-scheduler](https://github.com/Ceskard26/vsi-scheduler)
+- **IBM Cloud Code Engine:** [Documentación oficial](https://cloud.ibm.com/docs/codeengine)
+- **IBM Container Registry:** [Documentación oficial](https://cloud.ibm.com/docs/Registry)
+- **IBM VPC API:** [Referencia de API](https://cloud.ibm.com/apidocs/vpc)
+- **Cron Expressions:** [Crontab Guru](https://crontab.guru)
 
 ---
 
-## Optimización de Costos
-
-### Análisis de Costos
-
-**Componentes facturables:**
-
-| Recurso | Modelo de Facturación | Costo Estimado |
-|---------|----------------------|----------------|
-| Code Engine Jobs | vCPU-seconds + GB-seconds | $0.125/vCPU-hour |
-| Container Registry | GB-month storage | $0.50/GB-month |
-| VPC API Calls | Por request | Sin costo adicional |
-
-**Cálculo ejemplo (ambientes dev/test):**
-
-```
-Escenario: 10 VSIs, 2 jobs/día (start+stop), 22 días laborables/mes
-
-Ejecución por job:
-- vCPU: 0.25
-- Memoria: 512 MB
-- Duración: 30 segundos
-
-Costo mensual Code Engine:
-44 jobs × 30 seg × 0.25 vCPU = 0.09 vCPU-hours
-0.09 × $0.125 = $0.01/mes
-
-Ahorro en VSIs (12 horas/día apagadas):
-10 VSIs × 12 horas × 22 días × $0.05/hora = $132/mes
-
-ROI: 13,200% 🎯
-```
-
-### Rightsizing
-
-**Recomendaciones por escala:**
-
-| Instancias | CPU | Memoria | Max Execution Time |
-|------------|-----|---------|-------------------|
-| 1-5 | 0.125 | 256 MB | 300s |
-| 6-20 | 0.25 | 512 MB | 600s |
-| 21-50 | 0.5 | 1 GB | 900s |
-| 51+ | 1.0 | 2 GB | 1200s |
-
----
-
-## Conclusiones
-
-Esta arquitectura demuestra cómo las capacidades serverless de IBM Cloud Code Engine permiten construir soluciones de automatización enterprise-grade con inversión mínima en infraestructura. La combinación de Event Subscriptions para orquestación temporal, contenedores para portabilidad, y VPC API para control de ciclo de vida resulta en una solución robusta, escalable y cost-effective.
-
-**Ventajas clave:**
-- ✅ **TCO reducido:** Eliminación de infraestructura always-on
-- ✅ **Time-to-market:** Deployment en < 30 minutos
-- ✅ **Escalabilidad:** Soporte para cientos de instancias sin cambios arquitectónicos
-- ✅ **Observabilidad:** Logs y métricas integradas
-- ✅ **Seguridad:** Secrets management y permisos granulares
-
-### Próximos Pasos
-
-**Extensiones recomendadas:**
-1. **Notificaciones:** Integración con Event Notifications para alertas
-2. **Dashboards:** Visualización de métricas en Grafana/Kibana
-3. **GitOps:** Automatización de deployment con Terraform
-4. **Multi-región:** Replicación de solución cross-region
-5. **Policy-based:** Tagging de instancias para scheduling dinámico
-
----
-
-## Referencias
-
-- **IBM Cloud Code Engine:** https://cloud.ibm.com/docs/codeengine
-- **IBM Container Registry:** https://cloud.ibm.com/docs/Registry
-- **IBM VPC API Reference:** https://cloud.ibm.com/apidocs/vpc
-- **Cron Expression Guide:** https://crontab.guru
-- **Best Practices for Serverless:** https://12factor.net
-
----
-
-**Repositorio:** https://github.com/your-org/vsi-automation  
+**Autor:** César Carrasco - IBM Cloud Customer Success Specialist  
 **Contacto:** cesar.carrasco@ibm.com  
-**LinkedIn:** https://linkedin.com/in/cesar-carrasco
-
----
-
-*Esta documentación fue desarrollada siguiendo IBM Cloud Architecture Framework y Cloud Native Computing Foundation (CNCF) best practices.*
+**Fecha:** Diciembre 2024
