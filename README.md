@@ -21,7 +21,8 @@ Esta guía documenta la implementación de una solución serverless para automat
 
 ## Arquitectura de la Solución
 
-**[IMAGEN: Diagrama de arquitectura - architecture-diagram.png]**
+<img width="924" height="329" alt="Captura de pantalla 2025-12-10 a la(s) 2 25 38 p  m" src="https://github.com/user-attachments/assets/d23224fd-a30c-4e25-a0b9-c8be375b3b13" />
+
 *Flujo end-to-end desde desarrollo hasta ejecución automatizada*
 
 ### Componentes Principales
@@ -59,7 +60,6 @@ ibmcloud --version  # >= 2.0.0
 docker --version    # >= 20.10.0
 git --version       # >= 2.30.0
 ```
-
 Instalación de IBM Cloud CLI:
 - **macOS/Linux:** `curl -fsSL https://clis.cloud.ibm.com/install/linux | sh`
 - **Windows:** Descarga desde https://cloud.ibm.com/docs/cli
@@ -83,7 +83,8 @@ La API Key debe contar con las siguientes políticas IAM:
 | Code Engine | Writer | Despliegue de jobs y secrets |
 | Container Registry | Reader | Pull de imágenes de contenedor |
 
-**[IMAGEN: Captura de pantalla de IAM policies - iam-policies.png]**
+<img width="645" height="398" alt="Captura de pantalla 2025-12-10 a la(s) 2 31 38 p  m" src="https://github.com/user-attachments/assets/ee7e80fa-3018-4843-bc1c-2b0f8ca6d0d2" />
+
 *Configuración de políticas IAM requeridas*
 
 Creación de API Key:
