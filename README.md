@@ -16,7 +16,8 @@ Permite programar horarios de encendido y apagado de instancias VSI automáticam
 
 ## Arquitectura de la Solución
 
-**[IMAGEN: architecture-diagram.png]**
+![Diagrama de Arquitectura](images/architecture-diagram.png)
+*Flujo end-to-end desde desarrollo hasta ejecución automatizada*
 
 ### Componentes
 
@@ -120,10 +121,11 @@ docker images vsi-scheduler
 
 **Output esperado:**
 ```
-REPOSITORY         TAG      IMAGE ID       CREATED          SIZE
-vsi-scheduler      latest   024db388e914   2 minutes ago    254MB
+REPOSITORY                                 TAG      DIGEST         SIZE
+us.icr.io/vsi-automation/vsi-scheduler    latest   sha256:abc...  254 MB
 ```
 
+![Imagen en Container Registry](images/registry-image.png)
 ---
 
 ### Paso 3: Subir imagen a Container Registry
@@ -179,7 +181,7 @@ us.icr.io/vsi-automation/vsi-scheduler    latest   sha256:abc...  254 MB
 
 Acceda a [Code Engine Projects](https://cloud.ibm.com/codeengine/projects) y click en **"Create project"**.
 
-**[IMAGEN: ce-create-project.png]**
+![Crear proyecto en Code Engine](images/ce-create-project.png)
 
 Configuración:
 - **Name:** `vsi-automation` (o el nombre que prefiera)
@@ -197,7 +199,7 @@ Dentro del proyecto creado:
 2. Click en **"Create"**
 3. Seleccione **"Secret"**
 
-**[IMAGEN: ce-create-secret.png]**
+![Crear secret en Code Engine](images/ce-create-secret.png)
 
 Configuración:
 - **Name:** `ibm-api-credentials`
@@ -216,7 +218,7 @@ Click en **"Create"**.
 
 En el menú lateral, click en **"Jobs"** → **"Create"**.
 
-**[IMAGEN: ce-create-job.png]**
+![Crear job en Code Engine](images/ce-create-job.png)
 
 **Sección General:**
 - **Name:** `stop-vsis`
@@ -235,7 +237,7 @@ En el menú lateral, click en **"Jobs"** → **"Create"**.
 
 **Sección Environment variables:**
 
-**[IMAGEN: ce-job-envvars.png]**
+![Variables de entorno del job](images/ce-job-envvars.png)
 
 Click en **"Add"** para cada variable:
 
@@ -289,7 +291,7 @@ Repita el proceso anterior con estos cambios:
 2. Seleccione el job run más reciente
 3. Revise los logs
 
-**[IMAGEN: ce-jobrun-logs.png]**
+![Logs de ejecución del job](images/ce-jobrun-logs.png)
 
 **Logs esperados:**
 ```
@@ -323,7 +325,7 @@ IBM Cloud VPC Instance Scheduler - Multi-Instance
 
 Acceda a [VPC Infrastructure → Virtual server instances](https://cloud.ibm.com/vpc-ext/compute/vs)
 
-**[IMAGEN: vpc-instances-stopped.png]**
+![Instancias VSI detenidas](images/vpc-instances-stopped.png)
 
 Las instancias deberían mostrar estado `stopping` o `stopped`.
 
@@ -339,7 +341,7 @@ Repita el proceso con el job `start-vsis` para verificar que las instancias se i
 
 En el menú lateral, click en **"Event subscriptions"** → **"Create"**.
 
-**[IMAGEN: ce-create-subscription.png]**
+![Crear event subscription](images/ce-create-subscription.png)
 
 **Para iniciar VSIs (Lunes a Viernes 8 AM):**
 
