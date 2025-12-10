@@ -16,7 +16,7 @@ Permite programar horarios de encendido y apagado de instancias VSI automáticam
 
 ## Arquitectura de la Solución
 
-![Diagrama de Arquitectura](images/architecture-diagram.png)
+![Diagrama de Arquitectura](images/architechture-diagram.png)
 *Flujo end-to-end desde desarrollo hasta ejecución automatizada*
 
 ### Componentes
