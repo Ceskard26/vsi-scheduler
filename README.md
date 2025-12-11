@@ -46,18 +46,36 @@ docker --version
 git --version
 ```
 
-### 2. API Key con permisos
+## Prerrequisitos
 
-Crear una API Key desde la [consola de IBM Cloud](https://cloud.ibm.com/iam/apikeys) con los siguientes permisos mínimos:
+### Permisos de cuenta requeridos
+
+Para seguir este tutorial, su usuario de IBM Cloud debe tener los siguientes permisos:
+
+**Permisos de IAM Account Management:**
 
 | Servicio | Rol Requerido | Propósito |
 |----------|---------------|-----------|
-| VPC Infrastructure | Editor | Ejecutar acciones start/stop en VSIs |
-| Code Engine | Writer | Crear jobs y secrets |
-| Container Registry | Manager | Crear namespaces y push de imágenes |
+| All IAM Account Management services | **User API key creator** | Crear API keys para la automatización |
+
+**Permisos en servicios específicos:**
+
+| Servicio | Rol Requerido | Propósito |
+|----------|---------------|-----------|
+| Container Registry | Manager | Crear namespaces en Container Registry |
+| Code Engine | Manager o Writer | Crear proyectos, jobs y secrets |
+| VPC Infrastructure | Editor | Gestionar instancias VSI |
 | Resource Group | Viewer | Visualizar y targetear resource groups |
 
-**⚠️ Importante:** Guarde la API Key de forma segura. Solo se muestra una vez al crearla.
+**Si no tiene estos permisos:**
+- Contacte al administrador de su cuenta de IBM Cloud
+- Solicite específicamente el rol **"User API key creator"** en **"All IAM Account Management services"**
+- Solicite acceso de **Editor** o **Manager** en los servicios mencionados
+- Alternativamente, pida al administrador que cree la API Key con los permisos necesarios y se la comparta
+
+**Documentación:** [Gestión de acceso IAM](https://cloud.ibm.com/docs/account?topic=account-userroles)
+
+---
 
 ### 3. IDs de instancias VSI
 
@@ -198,7 +216,7 @@ Click en **"Create"**.
 Dentro del proyecto creado:
 1. Click en **"Secrets and configmaps"** (menú lateral)
 2. Click en **"Create"**
-3. Seleccione **"Secret"**
+3. Seleccione **"Registry Secret"**
 
 ![Crear secret en Code Engine](images/ce-create-secret.png)
 
