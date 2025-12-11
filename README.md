@@ -57,8 +57,6 @@ Crear una API Key desde la [consola de IBM Cloud](https://cloud.ibm.com/iam/apik
 | Container Registry | Manager | Crear namespaces y push de imágenes |
 | Resource Group | Viewer | Visualizar y targetear resource groups |
 
-**Documentación:** [Gestión de API Keys](https://cloud.ibm.com/docs/account?topic=account-userapikey&interface=ui)
-
 **⚠️ Importante:** Guarde la API Key de forma segura. Solo se muestra una vez al crearla.
 
 ### 3. IDs de instancias VSI
@@ -125,7 +123,6 @@ REPOSITORY                                 TAG      DIGEST         SIZE
 us.icr.io/vsi-automation/vsi-scheduler    latest   sha256:abc...  254 MB
 ```
 
-![Imagen en Container Registry](images/registry-image.png)
 ---
 
 ### Paso 3: Subir imagen a Container Registry
@@ -167,11 +164,15 @@ ibmcloud cr images --restrict vsi-automation
 
 **Output esperado:**
 ```
-REPOSITORY                                 TAG      DIGEST         SIZE
-us.icr.io/vsi-automation/vsi-scheduler    latest   sha256:abc...  254 MB
+Listing images...
+
+Repository                               Tag      Digest         Namespace        Created   Size    Security status
+us.icr.io/vsi-automation/vsi-scheduler   latest   024db388e914   vsi-automation   -         856 B   -
+
+OK
 ```
 
-**[IMAGEN: registry-image.png]**
+![Imagen en Container Registry](images/registry-image.png)
 
 ---
 
