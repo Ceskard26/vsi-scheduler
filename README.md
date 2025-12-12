@@ -476,4 +476,4 @@ ibmcloud cr namespace-add vsi-automation
 
 **Autor:** César Carrasco - IBM Cloud Customer Success Specialist  
 **Contacto:** cesar.carrasco@ibm.com  
-**Fecha:** Diciembre 2024
+**Fecha:** Diciembre 2025
