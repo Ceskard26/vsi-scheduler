@@ -2,3 +2,12 @@
 *.DS_Store
 .git-token
 *.token
+
+# Archivos sensibles
+.apikey.txt
+.git-token
+*.token
+*.key
+
+# Archivos ocultos de sistema
+.DS_Store
