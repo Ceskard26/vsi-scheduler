@@ -302,15 +302,13 @@ Repita el proceso anterior con estos cambios:
 2. Click en **"Submit job"**
 3. Click en **"Submit"**
 
-**[IMAGEN: ce-jobrun-running.png]**
-
 #### 6.2 Ver logs de ejecución
 
 1. Click en la pestaña **"Job runs"**
 2. Seleccione el job run más reciente
 3. Revise los logs
 
-![Logs de ejecución del job](images/ce-jobrun-logs.png)
+
 
 **Logs esperados:**
 ```
